@@ -1,23 +1,30 @@
+/*jslint node:true, bitwise:true */
+/*globals table*/
 /**
- * Retreive the /24 class-c network in which an IP address belongs.
+ * Retreive the cidr prefix to which an IP address belongs.
  * The IP can be passed as a string ('192.168.1.1') or as a long
  * numeric representation.
  * This is an IPv4 specific transformation.
  */
-function getClassC(ip) {
-  var classC, bytes;
+var prefix = function (ip, cidr) {
+  'use strict';
+  var subnet, bytes;
 
   if (typeof ip === 'string') {
     bytes = ip.split('.');
     if (bytes.length < 4) {
       return 'unknown';
     }
-    classC = new Buffer(bytes).readInt32BE(0);
+    subnet = new Buffer(bytes).readInt32BE(0);
   } else {
-    classC = ip;
+    subnet = ip;
   }
-  classC -= classC % 256;
-  return classC;
+
+  bytes = subnet % (1 << cidr);
+  if (bytes < 0) {
+    bytes += (1 << cidr);
+  }
+  return subnet - bytes;
 };
 
 /**
@@ -27,27 +34,38 @@ function getClassC(ip) {
  * which should be a dictionary where keys are subnet prefixes, which map
  * to an object keyed by CIDR and valued with countries.
  */
-module.exports = function (ip) {
-  var classC = getClassC(ip),
-    offset = 0,
+var lookup = function (table, ip) {
+  'use strict';
+  var subnet = prefix(ip, 32),
+    cidr = 32,
+    modulo = 0,
     keys,
     i;
 
-  if (!ip || classC === 'unknown') {
-    return 'unknown';
+  if (!ip || prefix === 'unknown') {
+    return 'ZZ';
   }
 
-  while (offset < 16) {
-    if (table[classC]) {
-      keys = Object.keys(table[classC]);
-      for (i = 24 - offset; i > 8; i -= 1) {
+  while (cidr > 0) {
+    if (table[subnet]) {
+      keys = Object.keys(table[subnet]);
+      for (i = cidr; i > 0; i -= 1) {
         if (keys.indexOf(String(i)) >= 0) {
-          return table[classC][String(i)];
+          return table[subnet][String(i)];
         }
       }
     }
-    offset += 1;
-    classC -= classC % (256 << (offset)); 
+    cidr -= 1;
+    subnet = prefix(subnet, 32 - cidr);
   }
-  return 'unknown';
+  return 'ZZ';
 };
+
+// This file can be concatinated to a pre-built table, or used
+// for lookups directly.
+if (typeof table === 'object') {
+  module.exports = lookup.bind({}, table);
+} else {
+  exports.lookup = lookup;
+  exports.prefix = prefix;
+}

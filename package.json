@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "description": "Self-contained IP to country lookup",
   "main": "ip2country.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/willscott/ip2country.git"
+  },
   "scripts": {
     "test": "grunt test"
   },
@@ -11,5 +15,13 @@
     "geoloc"
   ],
   "author": "Will Scott <willscott@gmail.com> (https://wills.co.tt)",
-  "license": "Apache 2.0"
+  "license": "Apache 2.0",
+  "devDependencies": {
+    "chalk": "^0.5.1",
+    "event-stream": "^3.1.7",
+    "fibers": "^1.0.2",
+    "grunt": "^0.4.5",
+    "q": "^1.1.2",
+    "seek-bzip": "^1.0.4"
+  }
 }
