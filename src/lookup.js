@@ -65,7 +65,8 @@ var lookup = function (table, ip) {
 // for lookups directly.
 if (typeof table === 'object') {
   module.exports = lookup.bind({}, table);
-} else {
-  exports.lookup = lookup;
-  exports.prefix = prefix;
+  exports.table = table;
 }
+
+exports.lookup = lookup;
+exports.prefix = prefix;
