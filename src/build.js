@@ -1,9 +1,10 @@
 /*jslint node:true, bitwise:true */
 var Q = require('q');
+var fs = require('fs');
 var http = require('http');
 var chalk = require('chalk');
 var es = require('event-stream');
-var BunzipStream = require('./bunzipstream');
+var spawn = require('child_process').spawn;
 var lookup = require('./lookup');
 
 // Take AS->Country web page and translate it to a JS lookup map.
@@ -75,32 +76,58 @@ var parseASLine = function (map, line) {
   }
 };
 
-// Create IP 2 AS Mapping.
-var createIP2ASMap = function () {
+// Download IP 2 AS Mapping.
+var loadIP2ASMap = function () {
   'use strict';
   var url = "http://archive.routeviews.org/dnszones/originas.bz2";
   // Note: routeviews will provide an IPv6 address, but the web server
   // doesn't listen on it appropriately. If your machine is ipv6 enabled
   // you will need to force an IPv4 connection by changing the above url
   // to "http://128.223.51.20/dnszones/originas.bz2".
-  console.log(chalk.blue("Loading IP -> ASN Map"));
+  console.log(chalk.blue("Downloading IP -> ASN Map"));
 
   return Q.Promise(function (resolve, reject) {
-    var map = {};
+    var download = fs.createWriteStream('originas.bz2');
 
     http.get(url, function (res) {
-      res.pipe(new BunzipStream())
-        .pipe(es.split())
-        .pipe(es.mapSync(parseASLine.bind({}, map)))
-        .on('end', function () {
-          console.log(chalk.green("Done."));
-          resolve(map);
-        })
-        .on('error', function (err) {
-          console.warn(chalk.red("ASN -> Country Map failed:" + err));
-          reject(err);
+      res.pipe(download);
+      res.on('end', function () {
+        console.log(chalk.blue("Uncompressing..."));
+        var decompression = spawn('bunzip2', ['originas.bz2']);
+        decompression.on('close', function (code) {
+          if (code !== 0) {
+            console.warn(chalk.red("Decompression failed:" + code));
+            reject(code);
+          } else {
+            console.log(chalk.green("Done."));
+            resolve('originas');
+          }
         });
+      }).on('error', function (err) {
+        console.warn(chalk.red("Download Failed:" + err));
+        reject(err);
+      });
     });
+  });
+};
+
+var parseIP2ASMap = function () {
+  'use strict';
+  var map = {},
+    file = fs.createReadStream('originas');
+  console.log(chalk.blue("Parsing IP -> ASN Map"));
+
+  return Q.promise(function (resolve, reject) {
+    file.pipe(es.split())
+      .pipe(es.mapSync(parseASLine.bind({}, map)))
+      .on('end', function () {
+        console.log(chalk.green("Done."));
+        resolve(map);
+      })
+      .on('error', function (err) {
+        console.warn(chalk.red("ASN -> Country Map failed:" + err));
+        reject(err);
+      });
   });
 };
 
@@ -172,15 +199,20 @@ var dedupeIP2CountryMap = function (countryMap) {
 // Do all the things.
 var getMap = function () {
   'use strict';
+  var countryMap;
   return createAS2CountryMap().then(function (a2cm) {
-    return createIP2ASMap().then(function (i2am) {
-      var i2cm = mergeIP2CountryMap(i2am, a2cm);
+    countryMap = a2cm;
+    return loadIP2ASMap();
+  }).then(function () {
+    return parseIP2ASMap().then(function (i2am) {
+      var i2cm = mergeIP2CountryMap(i2am, countryMap);
       return dedupeIP2CountryMap(i2cm);
     });
   });
 };
 
-exports.createIP2ASMap = createIP2ASMap;
+exports.loadIP2ASMap = loadIP2ASMap;
+exports.parseIP2ASMap = parseIP2ASMap;
 exports.createAS2CountryMap = createAS2CountryMap;
 exports.mergeIP2CountryMap = mergeIP2CountryMap;
 exports.dedupeIP2CountryMap = dedupeIP2CountryMap;
