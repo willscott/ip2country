@@ -6,12 +6,12 @@ the countries in which they are most probably located. Distributed as a
 stand-alone NPM module with no dependencies, the list is created at publication
 time. This mapping is generated through the use of two databases:
 
- * [bgp-originas](http://www.cidr-report.org/as2.0/bgp-originas.html) Provides
+ * [autnums](http://www.cidr-report.org/as2.0/autnums.html) Provides a
     textual descriptiosn of each registered ASN, including the country to which
     that ASN is registered.
- * [orginas](http://archive.routeviews.org/dnszones/originas.bz2) Provides a
-    current list of BGP announcements, allowing us to understand which ASN is
-    announcing ownership of which IP prefixes.
+ * [routeviews.org orginas](http://www.routeviews.org/) Provides a
+    current list of BGP announcements, allowing us to understand which ASNs
+    are announcing ownership of which IP prefixes.
 
 Installation
 -----
