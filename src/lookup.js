@@ -37,23 +37,15 @@ var prefix = function (ip, cidr) {
 var lookup = function (table, ip) {
   'use strict';
   var subnet = prefix(ip, 32),
-    cidr = 32,
-    modulo = 0,
-    keys,
-    i;
+    cidr = 32;
 
   if (!ip || prefix === 'unknown') {
     return 'ZZ';
   }
 
   while (cidr > 0) {
-    if (table[subnet]) {
-      keys = Object.keys(table[subnet]);
-      for (i = cidr; i > 0; i -= 1) {
-        if (keys.indexOf(String(i)) >= 0) {
-          return table[subnet][String(i)];
-        }
-      }
+    if (table[subnet + '/' + cidr]) {
+      return table[subnet + '/' + cidr];
     }
     cidr -= 1;
     subnet = prefix(subnet, 32 - cidr);

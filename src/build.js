@@ -67,12 +67,7 @@ var parseASLine = function (map, line) {
   if (result) {
     start = new Buffer(result[2].split('.')).readInt32BE(0);
     cidr = parseInt(result[3], 10);
-    if (!map[start]) {
-      map[start] = {};
-    }
-    if (!map[start][cidr]) {
-      map[start][cidr] = parseInt(result[1], 10);
-    }
+    map[start + '/' + cidr] = parseInt(result[1], 10);
   }
 };
 
@@ -134,66 +129,98 @@ var parseIP2ASMap = function () {
 // Merge IP->Country map from IP->ASN and ASN->Country maps.
 var mergeIP2CountryMap = function (ip2as, as2country) {
   'use strict';
-  var prefix,
+  var
+    keys = Object.keys(ip2as),
+    len = keys.length,
+    i,
+    prefix,
     cidr,
-    announcements = 0,
     notfound = 0;
   console.log(chalk.blue("Merging ASN and Country Maps"));
 
-  for (prefix in ip2as) {
-    if (ip2as.hasOwnProperty(prefix)) {
-      for (cidr in ip2as[prefix]) {
-        if (ip2as[prefix].hasOwnProperty(cidr)) {
-          announcements += 1;
-          ip2as[prefix][cidr] = as2country[ip2as[prefix][cidr]] || (++notfound && 'ZZ');
-        }
-      }
-    }
+  for (i = 0; i < len; i += 1) {
+    ip2as[keys[i]] = as2country[ip2as[keys[i]]] || (++notfound && 'ZZ');
   }
   // Get a 3decimal precision percentage of how many were okay.
-  announcements = Math.floor((announcements - notfound) / announcements * 1000) / 10;
-  console.log(chalk.green("Done. " + announcements + "% of announcments are geolocated."));
+  len = Math.floor((len - notfound) / len * 1000) / 10;
+  console.log(chalk.green("Done. " + len + "% of announcments are geolocated."));
   return ip2as;
 };
 
-// Merge redundant entries within the IP-Country mapping.
-var dedupeIP2CountryMap = function (countryMap) {
+// Find sibling pairs.
+// In practice this seems to remove 50% of entries.
+var reduceIP2CountryMap = function (map, pass) {
   'use strict';
-  var output = {},
+  var keys = Object.keys(map),
+    outMap = {},
+    withSameSib = 0,
+    i,
+    parts,
     prefix,
     cidr,
-    killed = 0,
-    wouldBe,
     sibling;
-  console.log(chalk.blue("Compressing Map"));
-
-  wouldBe = function (prefix, cidr) {
-    return lookup.lookup(countryMap, lookup.prefix(prefix, cidr - 1));
-  };
-  sibling = function (prefix, cidr) {
-    return lookup.lookup(countryMap, prefix ^ (1 << (32 - cidr)));
-  };
-
-  for (prefix in countryMap) {
-    if (countryMap.hasOwnProperty(prefix)) {
-      for (cidr in countryMap[prefix]) {
-        if (countryMap[prefix].hasOwnProperty(cidr)) {
-          // If this is the same as the implicit value.
-          if (wouldBe(prefix, cidr) === countryMap[prefix][cidr]) {
-            killed += 1;
-          } else {
-            if (!output[prefix]) {
-              output[prefix] = {};
-            }
-            output[prefix][cidr] = countryMap[prefix][cidr];
-          }
-        }
-      }
+  if (!pass) {
+    pass = 1;
+  }
+  console.log(chalk.blue("Cleaning up Map. Pass #" + pass));
+  
+  for (i = 0; i < keys.length; i += 1) {
+    parts = keys[i].split('/');
+    prefix = parseInt(parts[0], 10);
+    cidr = parseInt(parts[1], 10);
+    sibling = prefix ^ (1 << (32 - cidr));
+    if (map[sibling + '/' + cidr] === map[keys[i]]) {
+      withSameSib += 1;
+      outMap[lookup.prefix(prefix, cidr - 1) + '/' + (cidr - 1)] = map[keys[i]];
+    } else {
+      outMap[keys[i]] = map[keys[i]];
     }
   }
 
-  console.log(chalk.green("Done. Removed " + killed + " (%) unneded entries."));
-  return output;
+  console.log(chalk.green("Done. Collapsed " + withSameSib + " entries."));
+  if (withSameSib > 0) {
+    return reduceIP2CountryMap(outMap, pass + 1);
+  } else {
+    return outMap;
+  }
+};
+
+// Remove entries which share the same value as what would be found by going
+// up to their parent anyway.
+var dedupeIP2CountryMap = function (map) {
+  'use strict';
+  var keys = Object.keys(map),
+    outMap = {},
+    dups = 0,
+    i,
+    parts,
+    prefix,
+    cidr,
+    isDup = false;
+  console.log(chalk.blue("Pruning Map."));
+  
+  for (i = 0; i < keys.length; i += 1) {
+    parts = keys[i].split('/');
+    prefix = parseInt(parts[0], 10);
+    cidr = parseInt(parts[1], 10);
+    isDup = false;
+    while (cidr > 0) {
+      cidr -= 1;
+      prefix = lookup.prefix(prefix, cidr);
+      if (map[prefix + '/' + cidr] && map[prefix + '/' + cidr] === map[keys[i]]) {
+        isDup = true;
+        dups += 1;
+      } else if (map[prefix + '/' + cidr]) {
+        break;
+      }
+    }
+    if (!isDup) {
+      outMap[keys[i]] = map[keys[i]];
+    }
+  }
+
+  console.log(chalk.green("Done. Pruned " + dups + " entries."));
+  return outMap;
 };
 
 // Promise for the final Map
@@ -205,8 +232,11 @@ var getMap = function () {
     return loadIP2ASMap();
   }).then(function () {
     return parseIP2ASMap().then(function (i2am) {
-      var i2cm = mergeIP2CountryMap(i2am, countryMap);
-      return dedupeIP2CountryMap(i2cm);
+      return mergeIP2CountryMap(i2am, countryMap);
+    }).then(function (map) {
+      return reduceIP2CountryMap(map);
+    }).then(function (map) {
+      return dedupeIP2CountryMap(map);
     });
   });
 };
@@ -225,6 +255,7 @@ exports.loadIP2ASMap = loadIP2ASMap;
 exports.parseIP2ASMap = parseIP2ASMap;
 exports.createAS2CountryMap = createAS2CountryMap;
 exports.mergeIP2CountryMap = mergeIP2CountryMap;
+exports.reduceIP2CountryMap = reduceIP2CountryMap;
 exports.dedupeIP2CountryMap = dedupeIP2CountryMap;
 exports.getMap = getMap;
 exports.buildOutput = buildOutput;
