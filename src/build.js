@@ -196,7 +196,7 @@ var dedupeIP2CountryMap = function (countryMap) {
   return output;
 };
 
-// Do all the things.
+// Promise for the final Map
 var getMap = function () {
   'use strict';
   var countryMap;
@@ -211,9 +211,20 @@ var getMap = function () {
   });
 };
 
+// Creation of ip2country.js
+var buildOutput = function (map, outputStream) {
+  'use strict';
+  outputStream.write('var table = ');
+  outputStream.write(JSON.stringify(map));
+  outputStream.write(';\n');
+  outputStream.write(fs.readFileSync(require.resolve('./lookup')));
+  outputStream.end();
+};
+
 exports.loadIP2ASMap = loadIP2ASMap;
 exports.parseIP2ASMap = parseIP2ASMap;
 exports.createAS2CountryMap = createAS2CountryMap;
 exports.mergeIP2CountryMap = mergeIP2CountryMap;
 exports.dedupeIP2CountryMap = dedupeIP2CountryMap;
 exports.getMap = getMap;
+exports.buildOutput = buildOutput;
