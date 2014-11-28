@@ -1,0 +1,15 @@
+{
+  "name": "ip2country",
+  "version": "0.0.1",
+  "description": "Self-contained IP to country lookup",
+  "main": "ip2country.js",
+  "scripts": {
+    "test": "grunt test"
+  },
+  "keywords": [
+    "ip",
+    "geoloc"
+  ],
+  "author": "Will Scott <willscott@gmail.com> (https://wills.co.tt)",
+  "license": "Apache 2.0"
+}
