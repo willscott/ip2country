@@ -87,6 +87,9 @@ var loadIP2ASMap = function () {
     http.get(url, function (res) {
       res.pipe(download);
       res.on('end', function () {
+        if (fs.fileExistsSync('originas')) {
+          fs.unlinkSync('originas');
+        }
         console.log(chalk.blue("Uncompressing..."));
         var decompression = spawn('bunzip2', ['originas.bz2']);
         decompression.on('close', function (code) {
