@@ -65,7 +65,7 @@ var parseASLine = function (map, line) {
     start,
     cidr;
   if (result) {
-    start = new Buffer(result[2].split('.')).readInt32BE(0);
+    start = new Buffer(result[2].split('.')).readUInt32BE(0);
     cidr = parseInt(result[3], 10);
     map[start + '/' + cidr] = parseInt(result[1], 10);
   }
@@ -87,10 +87,14 @@ var loadIP2ASMap = function () {
     http.get(url, function (res) {
       res.pipe(download);
       res.on('end', function () {
-        if (fs.fileExistsSync('originas')) {
+        if (fs.existsSync('originas')) {
           fs.unlinkSync('originas');
         }
         console.log(chalk.blue("Uncompressing..."));
+        // Note: We download the file and use the external bunzip2 utility
+        // because the node seek-bzip and alternative JS native
+        // implementations are orders of magnitude slower, and make this
+        // a process which can't actually be done in a sane manner.
         var decompression = spawn('bunzip2', ['originas.bz2']);
         decompression.on('close', function (code) {
           if (code !== 0) {
@@ -226,6 +230,26 @@ var dedupeIP2CountryMap = function (map) {
   return outMap;
 };
 
+// Build the prefix tree of the map, to perform more advanced rearrangement.
+var treeTransform = function (map) {
+  'use strict';
+  var util = require('./util'),
+    tree,
+    transform,
+    output;
+  console.log(chalk.blue("Building Tree."));
+  tree = util.tableToTree(map);
+  console.log(chalk.blue("Merging Nodes."));
+  transform = util.safeMerge(tree, 'ZZ');
+  console.log(chalk.green("Done - merged " + transform + " keys."));
+  console.log(chalk.blue("Compacting."));
+  transform = util.findRearrangements(tree);
+  console.log(chalk.blue("Flattening."));
+  output = util.treeToTable(transform);
+  console.log(chalk.green("Done."));
+  return output;
+};
+
 // Promise for the final Map
 var getMap = function () {
   'use strict';
@@ -240,6 +264,12 @@ var getMap = function () {
       return reduceIP2CountryMap(map);
     }).then(function (map) {
       return dedupeIP2CountryMap(map);
+    }).then(function (map) {
+    // Uncomment the following 3 lines to save the pre-image.
+    //  var output = require('fs').createWriteStream('ip2country-pretree.js');
+    //  return exports.buildOutput(map, output).then(function () { return map; });
+    //}).then(function (map) {
+      return treeTransform(map);
     });
   });
 };
@@ -247,11 +277,13 @@ var getMap = function () {
 // Creation of ip2country.js
 var buildOutput = function (map, outputStream) {
   'use strict';
-  outputStream.write('var table = ');
-  outputStream.write(JSON.stringify(map));
-  outputStream.write(';\n');
-  outputStream.write(fs.readFileSync(require.resolve('./lookup')));
-  outputStream.end();
+  return Q.Promise(function (resolve, reject) {
+    outputStream.write('var table = ');
+    outputStream.write(JSON.stringify(map));
+    outputStream.write(';\n');
+    outputStream.write(fs.readFileSync(require.resolve('./lookup')));
+    outputStream.end(resolve);
+  });
 };
 
 exports.loadIP2ASMap = loadIP2ASMap;

@@ -5,6 +5,8 @@
  * The IP can be passed as a string ('192.168.1.1') or as a long
  * numeric representation.
  * This is an IPv4 specific transformation.
+ * @param {Integer} cidr, the number of bytes to keep. 32 keeps all bytes while
+ *     0 removes all bytes.
  */
 var prefix = function (ip, cidr) {
   'use strict';
@@ -15,16 +17,20 @@ var prefix = function (ip, cidr) {
     if (bytes.length < 4) {
       return 'unknown';
     }
-    subnet = new Buffer(bytes).readInt32BE(0);
+    subnet = new Buffer(bytes).readUInt32BE(0);
   } else {
     subnet = ip;
   }
 
-  bytes = subnet % (1 << cidr);
-  if (bytes < 0) {
-    bytes += (1 << cidr);
+  // Handle shift edge cases in javascript
+  if (cidr === 0) {
+    return 0;
+  } else if (cidr === 1) {
+    return subnet > 2147483648 ? 2147483648 : 0;
+  } else {
+    bytes = subnet % (1 << (32 - cidr));
+    return subnet - bytes;
   }
-  return subnet - bytes;
 };
 
 /**
@@ -36,8 +42,8 @@ var prefix = function (ip, cidr) {
  */
 var lookup = function (table, ip) {
   'use strict';
-  var subnet = prefix(ip, 32),
-    cidr = 32;
+  var cidr = 32,
+    subnet = prefix(ip, cidr);
 
   if (!ip || prefix === 'unknown') {
     return 'ZZ';
@@ -48,7 +54,7 @@ var lookup = function (table, ip) {
       return table[subnet + '/' + cidr];
     }
     cidr -= 1;
-    subnet = prefix(subnet, 32 - cidr);
+    subnet = prefix(subnet, cidr);
   }
   return 'ZZ';
 };
@@ -57,8 +63,10 @@ var lookup = function (table, ip) {
 // for lookups directly.
 if (typeof table === 'object') {
   module.exports = lookup.bind({}, table);
-  exports.table = table;
+  module.exports.table = table;
+} else {
+  module.exports = {};
 }
+module.exports.lookup = lookup;
+module.exports.prefix = prefix;
 
-exports.lookup = lookup;
-exports.prefix = prefix;

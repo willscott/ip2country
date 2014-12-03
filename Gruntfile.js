@@ -25,10 +25,12 @@ module.exports = function (grunt) {
 
     build.getMap().then(function (map) {
       var output = require('fs').createWriteStream('ip2country.js');
-      build.buildOuptut(map, output);
+      return build.buildOutput(map, output);
+    }).then(function () {
       require('fs').unlinkSync('originas');
       done(true);
     }, function (err) {
+      console.error(err);
       done(false);
     });
   });
