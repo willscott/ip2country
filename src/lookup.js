@@ -26,7 +26,7 @@ var prefix = function (ip, cidr) {
   if (cidr === 0) {
     return 0;
   } else if (cidr === 1) {
-    return subnet > 2147483648 ? 2147483648 : 0;
+    return subnet >= 2147483648 ? 2147483648 : 0;
   } else {
     bytes = subnet % (1 << (32 - cidr));
     return subnet - bytes;
