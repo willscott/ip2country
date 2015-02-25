@@ -233,19 +233,19 @@ var dedupeIP2CountryMap = function (map) {
 // Build the prefix tree of the map, to perform more advanced rearrangement.
 var treeTransform = function (map) {
   'use strict';
-  var util = require('./util'),
+  var treeBuilder = require('./tree'),
     tree,
     transform,
     output;
   console.log(chalk.blue("Building Tree."));
-  tree = util.tableToTree(map);
+  tree = treeBuilder.tableToTree(map);
   console.log(chalk.blue("Merging Nodes."));
-  transform = util.safeMerge(tree, 'ZZ');
+  transform = treeBuilder.safeMerge(tree, 'ZZ');
   console.log(chalk.green("Done - merged " + transform + " keys."));
   console.log(chalk.blue("Compacting."));
-  transform = util.findRearrangements(tree);
+  transform = treeBuilder.findRearrangements(tree);
   console.log(chalk.blue("Flattening."));
-  output = util.treeToTable(transform);
+  output = treeBuilder.treeToTable(transform);
   console.log(chalk.green("Done."));
   return output;
 };
