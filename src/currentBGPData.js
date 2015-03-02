@@ -63,10 +63,10 @@ var loadIP2ASMap = function () {
   });
 };
 
-var parseIP2ASMap = function () {
+var parseIP2ASMap = function (path) {
   'use strict';
   var map = {},
-    file = fs.createReadStream('originas');
+    file = fs.createReadStream(path);
   console.log(chalk.blue("Parsing IP -> ASN Map"));
 
   return Q.promise(function (resolve, reject) {

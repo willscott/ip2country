@@ -185,8 +185,8 @@ var getMap = function (when) {
   return createAS2CountryMap().then(function (a2cm) {
     countryMap = a2cm;
     return asmapper.loadIP2ASMap(when);
-  }).then(function () {
-    return asmapper.parseIP2ASMap().then(function (i2am) {
+  }).then(function (path) {
+    return asmapper.parseIP2ASMap(path).then(function (i2am) {
       return mergeIP2CountryMap(i2am, countryMap);
     }).then(function (map) {
       return reduceIP2CountryMap(map);
