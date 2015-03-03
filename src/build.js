@@ -172,8 +172,8 @@ var treeTransform = function (map) {
   return output;
 };
 
-// Promise for the final Map
-var getMap = function (when) {
+// Generic map maker with options exposed.
+var getGenericMap = function (compress, toCountry, when) {
   'use strict';
   var countryMap,
     asmapper;
@@ -182,24 +182,35 @@ var getMap = function (when) {
   } else {
     asmapper = require('./currentBGPData');
   }
-  return createAS2CountryMap().then(function (a2cm) {
-    countryMap = a2cm;
-    return asmapper.loadIP2ASMap(when);
-  }).then(function (path) {
-    return asmapper.parseIP2ASMap(path).then(function (i2am) {
-      return mergeIP2CountryMap(i2am, countryMap);
-    }).then(function (map) {
-      return reduceIP2CountryMap(map);
-    }).then(function (map) {
-      return dedupeIP2CountryMap(map);
-    }).then(function (map) {
-    // Uncomment the following 3 lines to save the pre-image.
-    //  var output = require('fs').createWriteStream('ip2country-pretree.js');
-    //  return exports.buildOutput(map, output).then(function () { return map; });
-    //}).then(function (map) {
-      return treeTransform(map);
-    });
+
+  return asmapper.loadIP2ASMap(when).then(function (path) {
+    return asmapper.parseIP2ASMap(path);
+  }).then(function (i2am) {
+    if (toCountry) {
+      return createAS2CountryMap().then(function (a2cm) {
+        return mergeIP2CountryMap(i2am, a2cm);
+      });
+    } else {
+      return i2am;
+    }
+  }).then(function (map) {
+    if (compress) {
+      return reduceIP2CountryMap(map)
+        .then(function (map) {
+          return dedupeIP2CountryMap(map);
+        }).then(function (map) {
+          return treeTransform(map);
+        });
+    } else {
+      return map;
+    }
   });
+};
+
+// Promise for the final Map
+var getMap = function () {
+  'use strict';
+  return getGenericMap(true, true);
 };
 
 // Creation of ip2country.js
@@ -219,4 +230,5 @@ exports.mergeIP2CountryMap = mergeIP2CountryMap;
 exports.reduceIP2CountryMap = reduceIP2CountryMap;
 exports.dedupeIP2CountryMap = dedupeIP2CountryMap;
 exports.getMap = getMap;
+exports.getGenericMap = getGenericMap;
 exports.buildOutput = buildOutput;
