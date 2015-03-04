@@ -13,22 +13,26 @@ var offsets = [0, 0],
   parseASLine,
   asnRegex = /(\d+) [ie]$/;
 
-var parseRIBLine = function (map, line) {
+var parseRIBLine = function (seen, map, line) {
   'use strict';
-  var networkEnd = line.indexOf(" ", offsets[0]),
+  var networkSlash = line.indexOf("/", offsets[0]),
+    networkEnd = line.indexOf(" ", networkSlash),
     network,
     asn;
   if (networkEnd < 0) {
     return;
   }
   network = line.substring(offsets[0], networkEnd);
-  if (map[network]) {
+  if (seen[network]) {
     return;
+  } else {
+    seen[network] = true;
   }
+  network = new Buffer(network.substr(0, networkSlash - offsets[0]).split('.')).readUInt32BE(0);
 
   asn = asnRegex.exec(line.substr(offsets[1]));
   if (asn) {
-    map[network] = parseInt(asn[1], 10);
+    map[network + line.substring(networkSlash, networkEnd)] = parseInt(asn[1], 10);
   }
 };
 
@@ -41,12 +45,12 @@ var parseRIBHeader = function (map, line) {
     console.log(chalk.blue("Header parameters learned: " + net + ", " + path));
   }
 };
-parseASLine = function (m, l) {
+parseASLine = function (s, m, l) {
   'use strict';
   if (offsets[0] === 0) {
     parseRIBHeader(m, l);
   } else {
-    parseRIBLine(m, l);
+    parseRIBLine(s, m, l);
   }
 };
 
@@ -94,12 +98,12 @@ var loadIP2ASMap = function (when) {
 
 var parseIP2ASMap = function (path) {
   'use strict';
-  var map = {};
+  var seen = {}, map = {};
   console.log(chalk.blue("Parsing IP -> ASN Map"));
 
   return Q.promise(function (resolve, reject) {
     var rl = readline(path);
-    rl.on('line', parseASLine.bind({}, map))
+    rl.on('line', parseASLine.bind({}, seen, map))
       .on('end', function () {
         console.log(chalk.green("Done."));
         resolve(map);

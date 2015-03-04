@@ -45,7 +45,7 @@ var lookup = function (table, ip) {
   var cidr = 32,
     subnet = prefix(ip, cidr);
 
-  if (!ip || prefix === 'unknown') {
+  if (!ip || subnet === 'unknown') {
     return 'ZZ';
   }
 
