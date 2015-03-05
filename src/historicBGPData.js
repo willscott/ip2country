@@ -9,11 +9,9 @@ var moment = require('moment');
 
 // Take a line of the origin RIB file and load it into a hash map.
 // Map format is {start -> {cidr -> asn}}
-var offsets = [0, 0],
-  parseASLine,
-  asnRegex = /(\d+) [ie]$/;
+var asnRegex = /(\d+) [ie]$/;
 
-var parseRIBLine = function (seen, map, line) {
+var parseRIBLine = function (offsets, seen, map, line) {
   'use strict';
   var networkSlash = line.indexOf("/", offsets[0]),
     networkEnd = line.indexOf(" ", networkSlash),
@@ -36,7 +34,7 @@ var parseRIBLine = function (seen, map, line) {
   }
 };
 
-var parseRIBHeader = function (map, line) {
+var parseRIBHeader = function (offsets, map, line) {
   'use strict';
   var net = line.indexOf("Network"),
     path = line.indexOf("Path");
@@ -45,12 +43,13 @@ var parseRIBHeader = function (map, line) {
     console.log(chalk.blue("Header parameters learned: " + net + ", " + path));
   }
 };
-parseASLine = function (s, m, l) {
+
+var parseASLine = function (c, s, m, l) {
   'use strict';
-  if (offsets[0] === 0) {
-    parseRIBHeader(m, l);
+  if (c[0] === 0) {
+    parseRIBHeader(c, m, l);
   } else {
-    parseRIBLine(s, m, l);
+    parseRIBLine(c, s, m, l);
   }
 };
 
@@ -98,12 +97,12 @@ var loadIP2ASMap = function (when) {
 
 var parseIP2ASMap = function (path) {
   'use strict';
-  var seen = {}, map = {};
+  var conf = [0, 0], seen = {}, map = {};
   console.log(chalk.blue("Parsing IP -> ASN Map"));
 
   return Q.promise(function (resolve, reject) {
     var rl = readline(path);
-    rl.on('line', parseASLine.bind({}, seen, map))
+    rl.on('line', parseASLine.bind({}, conf, seen, map))
       .on('end', function () {
         console.log(chalk.green("Done."));
         resolve(map);
