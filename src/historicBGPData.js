@@ -39,7 +39,8 @@ var parseRIBHeader = function (offsets, map, line) {
   var net = line.indexOf("Network"),
     path = line.indexOf("Path");
   if (net > 0 && path > 0) {
-    offsets = [net, path];
+    offsets[0] = net;
+    offsets[1] = path;
     console.log(chalk.blue("Header parameters learned: " + net + ", " + path));
   }
 };
