@@ -61,7 +61,7 @@ var loadIP2ASMap = function (when) {
     url;
   roundedTime.hour(roundedTime.hour() - (roundedTime.hour() % 2));
   url = roundedTime.format("[http://archive.routeviews.org/oix-route-views/]YYYY.MM/[oix-full-snapshot-]YYYY-MM-DD-HHmm[.bz2]");
-  
+
   console.log(chalk.blue(roundedTime.format("[Downloading IP -> ASN Map for] MMM D, YYYY")));
 
   return Q.Promise(function (resolve, reject) {
@@ -82,7 +82,14 @@ var loadIP2ASMap = function (when) {
         decompression.on('close', function (code) {
           if (code !== 0) {
             console.warn(chalk.red("Decompression failed:" + code));
-            reject(code);
+            if (roundedTime.hour() < 20) {
+              roundedTime.hour(roundedTime.hour() + 2);
+              console.log(chalk.yellow('Attempting next snapshot for ' +
+                  roundedTime.hour() + ':00.'));
+              loadIP2ASMap(roundedTime.format()).then(resolve, reject);
+            } else {
+              reject(code);
+            }
           } else {
             console.log(chalk.green("Done."));
             resolve('rib');
@@ -117,4 +124,3 @@ var parseIP2ASMap = function (path) {
 
 exports.loadIP2ASMap = loadIP2ASMap;
 exports.parseIP2ASMap = parseIP2ASMap;
-
