@@ -110,7 +110,9 @@ var reduceIP2CountryMap = function (map, pass) {
   if (withSameSib > 0) {
     return reduceIP2CountryMap(outMap, pass + 1);
   } else {
-    return outMap;
+    /*jslint newcap:true*/
+    return Q(outMap);
+    /*jslint newcap:false*/
   }
 };
 
@@ -167,7 +169,7 @@ var treeTransform = function (map) {
   console.log(chalk.blue("Compacting."));
   transform = treeBuilder.findRearrangements(tree);
   console.log(chalk.blue("Flattening."));
-  output = treeBuilder.treeToTable(transform);
+  output = treeBuilder.treeToTable(tree);
   console.log(chalk.green("Done."));
   return output;
 };
