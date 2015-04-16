@@ -55,13 +55,13 @@ var parseASLine = function (c, s, m, l) {
 };
 
 // Download IP 2 AS Mapping.
-var loadIP2ASMap = function (when) {
+var loadIP2ASMap = function (when, nocache) {
   'use strict';
   var roundedTime = moment(when).startOf('hour'),
     url;
   roundedTime.hour(roundedTime.hour() - (roundedTime.hour() % 2));
   url = roundedTime.format("[http://archive.routeviews.org/oix-route-views/]YYYY.MM/[oix-full-snapshot-]YYYY-MM-DD-HHmm[.bz2]");
-  
+
   console.log(chalk.blue(roundedTime.format("[Downloading IP -> ASN Map for] MMM D, YYYY")));
 
   return Q.Promise(function (resolve, reject) {
@@ -115,6 +115,13 @@ var parseIP2ASMap = function (path) {
   });
 };
 
+var cleanup = function (nocache) {
+  // don't know what day rib is from, so harder to save it.
+  if (fs.existsSync('rib')) {
+    fs.unlinkSync('rib');
+  }
+};
+
 exports.loadIP2ASMap = loadIP2ASMap;
 exports.parseIP2ASMap = parseIP2ASMap;
-
+exports.cleanup = cleanup;

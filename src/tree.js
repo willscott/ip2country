@@ -55,12 +55,12 @@ exports.tableToTree = function (table) {
 /**
  * Print the human readable cidr representation of a tree node.
  */
-exports.printNode = function (node) {
+exports.toString = function (node) {
   'use strict';
   var buf = new Buffer(4);
   buf.writeUInt32BE(node.ip, 0);
-  console.log(buf[0] + '.' + buf[1] + '.' + buf[2] + '.' + buf[3] +
-              '/' + node.cidr + ' - ' + node.value);
+  return buf[0] + '.' + buf[1] + '.' + buf[2] + '.' + buf[3] +
+      '/' + node.cidr + ' - ' + node.value;
 };
 
 /**
@@ -72,9 +72,9 @@ exports.insertInTree = function (root, node) {
     pos = Math.floor(len / 2);
   // Binary search the children to see if the node is contained by any of them.
   while (len >= 1) {
-    if (root.children[pos].ip + (1 << (32 - root.children[pos].cidr)) <= node.ip) {
+    if (exports.precedes(root.children[pos], node)) {
       pos = Math.floor(pos + len / 2);
-    } else if (root.children[pos].ip > node.ip) {
+    } else if (exports.precedes(node, root.children[pos])) {
       pos = Math.floor(pos - len / 2);
     }
     if (pos < 0) {
@@ -85,15 +85,30 @@ exports.insertInTree = function (root, node) {
     len = Math.floor(len / 2);
   }
 
+  if (root.children[pos] && root.children[pos].ip +
+      (1 << (32 - root.children[pos].cidr)) <= node.ip) {
+    pos += 1;
+  }
+
   if (root.children[pos] && exports.contains(root.children[pos], node)) {
-    exports.insertInTree(root.children[pos], node);
+    return exports.insertInTree(root.children[pos], node);
   } else {
-    // if not, insert the new node at this level.
-    if (root.children[pos] && root.children[pos].ip +
-        (1 << (32 - root.children[pos].cidr)) <= node.ip) {
-      pos += 1;
+    // Find containment range of existing children than should be in the node.
+    var children, start = pos, end = pos;
+    for (start = pos; start >= 0; start -= 1) {
+      if (!root.children[start] || !exports.contains(node, root.children[start])) {
+        break;
+      }
     }
-    root.children.splice(pos, 0, node);
+    for (end = pos; end < root.children.length; end += 1) {
+      if (!exports.contains(node, root.children[end])) {
+        break;
+      }
+    }
+    children = root.children.splice(start, end-start, node);
+    children.forEach(exports.insertInTree.bind({}, node));
+
+    return [root, start];
   }
 };
 
@@ -212,6 +227,11 @@ exports.afterNode = function (node) {
   return newNode;
 };
 
+// Return true if a precedes b in the IP address space.
+exports.precedes = function (a, b) {
+  return (a.ip + (1 << 32 - a.cidr) <= b.ip);
+};
+
 
 
 /**
@@ -225,11 +245,13 @@ exports.safeMerge = function (node, parentValue) {
   var i,
     j,
     merged,
+    tomerge = [],
     bad,
     nm = 0;
   for (i = 1; i < node.children.length; i += 1) {
-    if (node.children[i].value === node.children[i - 1].value) {
+    if (i >= 1 && node.children[i].value === node.children[i - 1].value) {
       merged = exports.span(node.children[i], node.children[i - 1]);
+      tomerge = [];
       // Are there problems with this merged node?
       bad = false;
       j = i + 1;
@@ -237,6 +259,7 @@ exports.safeMerge = function (node, parentValue) {
         if (node.children[j].value !== merged.value) {
           bad = true;
         }
+        tomerge.push(node.children[j]);
         j += 1;
       }
       j = i - 2;
@@ -244,17 +267,25 @@ exports.safeMerge = function (node, parentValue) {
         if (node.children[j].value !== merged.value) {
           bad = true;
         }
+        tomerge.push(node.children[j]);
         j -= 1;
       }
+
       // Do the merge.
       if (!bad) {
         nm += 1;
         merged.children = node.children[i - 1].children;
         for (j = 0; j < node.children[i].children.length; j += 1) {
-          merged.children.push(node.children[i].children[j]);
+          exports.insertInTree(merged, node.children[i].children[j]);
         }
-        node.children.splice(i - 1, 2, merged);
-        i -= 1;
+        node.children.splice(i - 1, 2);
+        j = i;
+        for (j = 0; j < tomerge.length; j += 1) {
+          exports.insertInTree(merged, tomerge[j]);
+          node.children.splice(node.children.indexOf(tomerge[j]), 1);
+        }
+        var nr = exports.insertInTree(node, merged);
+        i -= (1 + tomerge.length);
       }
     }
   }
@@ -278,7 +309,7 @@ exports.findRearrangements = function (node) {
   if (node.children.length < 3) {
     return node;
   }
-  
+
   for (i = 0; i < node.children.length; i += 1) {
     if (!vcounts[node.children[i].value]) {
       vcounts[node.children[i].value] = 0;
@@ -322,7 +353,7 @@ exports.findRearrangements = function (node) {
     ));
   }
   delete candidate.newChildren;
-  
+
   exports.dedup(candidate);
 
   maxCount = 0;
@@ -385,7 +416,7 @@ exports.treeToTable = function (node) {
   addKeys = function (key) {
     table[key] = childKeys[key];
   };
-  
+
   for (i = 0; i < node.children.length; i += 1) {
     table[node.children[i].key] = node.children[i].value;
     childKeys = exports.treeToTable(node.children[i]);
