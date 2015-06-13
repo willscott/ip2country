@@ -55,7 +55,7 @@ var parseASLine = function (c, s, m, l) {
 };
 
 // Download IP 2 AS Mapping.
-var loadIP2ASMap = function (when) {
+var loadIP2ASMap = function (when, nocache) {
   'use strict';
   var roundedTime = moment(when).startOf('hour'),
     url;
@@ -122,5 +122,13 @@ var parseIP2ASMap = function (path) {
   });
 };
 
+var cleanup = function (nocache) {
+  // don't know what day rib is from, so harder to save it.
+  if (fs.existsSync('rib')) {
+    fs.unlinkSync('rib');
+  }
+};
+
 exports.loadIP2ASMap = loadIP2ASMap;
 exports.parseIP2ASMap = parseIP2ASMap;
+exports.cleanup = cleanup;

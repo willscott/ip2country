@@ -92,7 +92,7 @@ var reduceIP2CountryMap = function (map, pass) {
     pass = 1;
   }
   console.log(chalk.blue("Cleaning up Map. Pass #" + pass));
-  
+
   for (i = 0; i < keys.length; i += 1) {
     parts = keys[i].split('/');
     prefix = parseInt(parts[0], 10);
@@ -110,7 +110,9 @@ var reduceIP2CountryMap = function (map, pass) {
   if (withSameSib > 0) {
     return reduceIP2CountryMap(outMap, pass + 1);
   } else {
-    return outMap;
+    /*jslint newcap:true*/
+    return Q(outMap);
+    /*jslint newcap:false*/
   }
 };
 
@@ -127,7 +129,7 @@ var dedupeIP2CountryMap = function (map) {
     cidr,
     isDup = false;
   console.log(chalk.blue("Pruning Map."));
-  
+
   for (i = 0; i < keys.length; i += 1) {
     parts = keys[i].split('/');
     prefix = parseInt(parts[0], 10);
@@ -167,13 +169,13 @@ var treeTransform = function (map) {
   console.log(chalk.blue("Compacting."));
   transform = treeBuilder.findRearrangements(tree);
   console.log(chalk.blue("Flattening."));
-  output = treeBuilder.treeToTable(transform);
+  output = treeBuilder.treeToTable(tree);
   console.log(chalk.green("Done."));
   return output;
 };
 
 // Generic map maker with options exposed.
-var getGenericMap = function (compress, toCountry, when) {
+var getGenericMap = function (compress, toCountry, when, nocache) {
   'use strict';
   var countryMap,
     asmapper;
@@ -183,9 +185,10 @@ var getGenericMap = function (compress, toCountry, when) {
     asmapper = require('./currentBGPData');
   }
 
-  return asmapper.loadIP2ASMap(when).then(function (path) {
+  return asmapper.loadIP2ASMap(when, nocache).then(function (path) {
     return asmapper.parseIP2ASMap(path);
   }).then(function (i2am) {
+    asmapper.cleanup(nocache);
     if (toCountry) {
       return createAS2CountryMap().then(function (a2cm) {
         return mergeIP2CountryMap(i2am, a2cm);

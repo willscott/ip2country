@@ -22,7 +22,7 @@ var parseASLine = function (map, line) {
 };
 
 // Download IP 2 AS Mapping.
-var loadIP2ASMap = function () {
+var loadIP2ASMap = function (when, nocache) {
   'use strict';
   var url = "http://archive.routeviews.org/dnszones/originas.bz2";
   // Note: routeviews will provide an IPv6 address, but the web server
@@ -31,15 +31,21 @@ var loadIP2ASMap = function () {
   // to "http://128.223.51.20/dnszones/originas.bz2".
   console.log(chalk.blue("Downloading IP -> ASN Map"));
 
+  if (!nocache && fs.existsSync('originas') &&
+      (new Date() - fs.statSync('originas').ctime) / 1000 / 60 / 60 / 24 < 1) {
+    /*jslint newcap:true */
+    return Q('originas');
+    /*jslint newcap:false */
+  } else if (fs.existsSync('originas')) {
+    fs.unlinkSync('originas');
+  }
+
   return Q.Promise(function (resolve, reject) {
     var download = fs.createWriteStream('originas.bz2');
 
     http.get(url, function (res) {
       res.pipe(download);
       res.on('end', function () {
-        if (fs.existsSync('originas')) {
-          fs.unlinkSync('originas');
-        }
         console.log(chalk.blue("Uncompressing..."));
         // Note: We download the file and use the external bunzip2 utility
         // because the node seek-bzip and alternative JS native
@@ -83,6 +89,13 @@ var parseIP2ASMap = function (path) {
   });
 };
 
+var cleanup = function (nocache) {
+  if (nocache || (fs.existsSync('originas') &&
+      (new Date() - fs.statSync('originas').ctime) / 1000 / 60 / 60 / 24 > 1)) {
+    fs.unlinkSync('originas');
+  }
+};
+
 exports.loadIP2ASMap = loadIP2ASMap;
 exports.parseIP2ASMap = parseIP2ASMap;
-
+exports.cleanup = cleanup;
