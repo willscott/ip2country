@@ -6,6 +6,8 @@ var chalk = require('chalk');
 var es = require('event-stream');
 var spawn = require('child_process').spawn;
 
+var cache = require('./cache');
+
 // Take a line of the origin AS file and load it into a hash map.
 // Map format is {start -> {cidr -> asn}}
 var parseASLineRegex = /IN TXT\s+"(\d+)" "(\d+\.\d+\.\d+\.\d+)" "(\d+)"/;
@@ -29,16 +31,14 @@ var loadIP2ASMap = function (when, nocache) {
   // doesn't listen on it appropriately. If your machine is ipv6 enabled
   // you will need to force an IPv4 connection by changing the above url
   // to "http://128.223.51.20/dnszones/originas.bz2".
-  console.log(chalk.blue("Downloading IP -> ASN Map"));
 
-  if (!nocache && fs.existsSync('originas') &&
-      (new Date() - fs.statSync('originas').ctime) / 1000 / 60 / 60 / 24 < 1) {
+  if (!nocache && cache.has('originas', 1000 * 60 * 60 * 24)) {
+    console.log(chalk.blue("IP -> ASN Map Cached."));
     /*jslint newcap:true */
     return Q('originas');
     /*jslint newcap:false */
-  } else if (fs.existsSync('originas')) {
-    fs.unlinkSync('originas');
   }
+  console.log(chalk.blue("Downloading IP -> ASN Map"));
 
   return Q.Promise(function (resolve, reject) {
     var download = fs.createWriteStream('originas.bz2');

@@ -57,7 +57,7 @@ var parseASLine = function (c, s, m, l) {
 // Download IP 2 AS Mapping.
 var loadIP2ASMap = function (when, nocache) {
   'use strict';
-  var roundedTime = moment(when).startOf('hour'),
+  var roundedTime = moment(when, ["MM-DD-YYYY", "MM-DD-YYYY HH:mm", moment.ISO_8601]).startOf('hour'),
     url;
   roundedTime.hour(roundedTime.hour() - (roundedTime.hour() % 2));
   url = roundedTime.format("[http://archive.routeviews.org/oix-route-views/]YYYY.MM/[oix-full-snapshot-]YYYY-MM-DD-HHmm[.bz2]");

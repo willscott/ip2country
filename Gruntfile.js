@@ -23,7 +23,7 @@ module.exports = function (grunt) {
     var build = require('./src/build'),
       done = this.async();
 
-    build.getMap().then(function (map) {
+    build.getMap(grunt.option('verbose')).then(function (map) {
       var output = require('fs').createWriteStream('ip2country.js');
       return build.buildOutput(map, output);
     }).then(function() {

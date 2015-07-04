@@ -1,59 +1,11 @@
 /*jslint node:true, bitwise:true */
-var Q = require('q');
+var chalk = require('chalk');
 var fs = require('fs');
 var http = require('http');
-var chalk = require('chalk');
+var Q = require('q');
+
+var as2country = require('./as2country');
 var lookup = require('./lookup');
-
-// Take AS->Country web page and translate it to a JS lookup map.
-var parseAS2CountryMap = function (page) {
-  'use strict';
-  var regex = /AS(\d*)[\s\S]*,([A-Z]{2})/m,
-    lines = page.split('<a href'),
-    line,
-    db = {},
-    i;
-  console.log(chalk.blue("Parsing ASN -> Country Map"));
-
-  for (i = 0; i < lines.length; i += 1) {
-    line = regex.exec(lines[i]);
-    if (line && line[2] !== 'ZZ') {
-      db[line[1]] = line[2];
-    }
-  }
-  console.log(chalk.green("Done."));
-  return db;
-};
-
-// Create AS 2 Country Mapping.
-var createAS2CountryMap = function () {
-  'use strict';
-  var url = "http://www.cidr-report.org/as2.0/autnums.html";
-  console.log(chalk.blue("Loading ASN -> Country Map"));
-
-  return Q.Promise(function (resolve, reject) {
-    var data = '';
-
-    http.get(url, function (res) {
-      res.on('data', function (chunk) {
-        data += chunk.toString();
-      });
-
-      res.on('end', function () {
-        console.log(chalk.green("Done."));
-        data = parseAS2CountryMap(data);
-        resolve(data);
-        data = '';
-      });
-
-      res.on('error', function (err) {
-        console.warn(chalk.red("ASN -> Country Map failed:" + err));
-        reject(err);
-      });
-    });
-  });
-};
-
 
 // Merge IP->Country map from IP->ASN and ASN->Country maps.
 var mergeIP2CountryMap = function (ip2as, as2country) {
@@ -190,7 +142,7 @@ var getGenericMap = function (compress, toCountry, when, nocache) {
   }).then(function (i2am) {
     asmapper.cleanup(nocache);
     if (toCountry) {
-      return createAS2CountryMap().then(function (a2cm) {
+      return as2country.createAS2CountryMap(nocache).then(function (a2cm) {
         return mergeIP2CountryMap(i2am, a2cm);
       });
     } else {
@@ -211,7 +163,7 @@ var getGenericMap = function (compress, toCountry, when, nocache) {
 };
 
 // Promise for the final Map
-var getMap = function () {
+var getMap = function (verbose) {
   'use strict';
   return getGenericMap(true, true);
 };
@@ -228,8 +180,6 @@ var buildOutput = function (map, outputStream) {
   });
 };
 
-exports.createAS2CountryMap = createAS2CountryMap;
-exports.mergeIP2CountryMap = mergeIP2CountryMap;
 exports.reduceIP2CountryMap = reduceIP2CountryMap;
 exports.dedupeIP2CountryMap = dedupeIP2CountryMap;
 exports.getMap = getMap;
