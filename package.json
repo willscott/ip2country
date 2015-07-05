@@ -1,6 +1,6 @@
 {
   "name": "ip2country",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Self-contained IP to country lookup",
   "main": "ip2country.js",
   "repository": {
@@ -17,13 +17,13 @@
   "author": "Will Scott <willscott@gmail.com> (https://wills.co.tt)",
   "license": "Apache 2.0",
   "devDependencies": {
-    "chai": "^2.2.0",
+    "chai": "^3.0.0",
     "chalk": "^1.0.0",
     "event-stream": "^3.1.7",
     "grunt": "^0.4.5",
     "grunt-contrib-jshint": "^0.11.0",
     "grunt-mocha-test": "^0.12.4",
-    "linebyline": "0.0.7",
+    "linebyline": "0.0.9",
     "mocha": "^2.0.1",
     "moment": "^2.9.0",
     "q": "^1.1.2"
