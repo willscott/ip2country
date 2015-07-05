@@ -6,6 +6,9 @@
  */
 var lookup = require('./lookup');
 
+// If set, traces all operations occuring to a given IP.
+var traceIP = false;
+
 /**
  * Determine if one prefix node (parent) contains another (child)
  */
@@ -45,6 +48,9 @@ exports.tableToTree = function (table) {
         value: table[key],
         children: []
       };
+    if (traceIP && exports.contains(node, traceIP)) {
+      node.trace = true;
+    }
 
     exports.insertInTree(root, node);
   });
@@ -64,14 +70,25 @@ exports.toString = function (node) {
 };
 
 /**
+ * Insert an array of nodes into an IP prefix tree.
+ */
+exports.insertAllInTree = function (root, nodes) {
+  'use strict';
+  for (var i = 0; i < nodes.length; i += 1) {
+    exports.insertInTree(root, nodes[i]);
+  }
+};
+
+/**
  * Insert a node into an IP prefix tree
  */
 exports.insertInTree = function (root, node) {
   'use strict';
   var len = root.children.length,
-    pos = Math.floor(len / 2);
+    pos = Math.floor(len / 2),
+    i = 0;
   // Binary search the children to see if the node is contained by any of them.
-  while (len >= 1) {
+  while (len > 1) {
     if (exports.precedes(root.children[pos], node)) {
       pos = Math.floor(pos + len / 2);
     } else if (exports.precedes(node, root.children[pos])) {
@@ -82,34 +99,53 @@ exports.insertInTree = function (root, node) {
     } else if (pos >= root.children.length) {
       pos = root.children.length - 1;
     }
-    len = Math.floor(len / 2);
+    len = Math.ceil(len / 2);
   }
 
-  if (root.children[pos] && root.children[pos].ip +
-      (1 << (32 - root.children[pos].cidr)) <= node.ip) {
+  while (root.children[pos] && exports.precedes(root.children[pos], node)) {
     pos += 1;
   }
-
-  if (root.children[pos] && exports.contains(root.children[pos], node)) {
-    return exports.insertInTree(root.children[pos], node);
-  } else {
-    // Find containment range of existing children than should be in the node.
-    var children, start = pos, end = pos;
-    for (start = pos; start >= 0; start -= 1) {
-      if (!root.children[start] || !exports.contains(node, root.children[start])) {
-        break;
-      }
-    }
-    for (end = pos; end < root.children.length; end += 1) {
-      if (!exports.contains(node, root.children[end])) {
-        break;
-      }
-    }
-    children = root.children.splice(start, end-start, node);
-    children.forEach(exports.insertInTree.bind({}, node));
-
-    return [root, start];
+  while (root.children[pos - 1] && !exports.precedes(root.children[pos - 1], node)) {
+    pos -= 1;
   }
+  // Pos is now at the start of children with containment relationship with node.
+  len = 0;
+  while (root.children[pos + len] && !exports.precedes(node, root.children[pos + len])) {
+    len += 1;
+  }
+  // Pos + len is now at the end of children with containment relationships with node.
+  for (i = 0; i < len; i += 1) {
+    if (root.children[pos + i].ip === node.ip && root.children[pos +i].cidr === node.cidr) {
+      if (root.children[pos + i].value != node.value) {
+        console.warn('Potentially loosing information in overwrite of value.');
+      } else if (root.children[pos + i].trace) {
+        console.log('Node was merged with equivalent node.', exports.toString(node));
+        node.trace = true;
+      }
+      root.children[pos + i].children.forEach(exports.insertInTree.bind({}, node));
+      root.children[pos + i] = node;
+      return [root, pos + i];
+    }
+    else if (exports.contains(root.children[pos + i], node)) {
+      return exports.insertInTree(root.children[pos + i], node);
+    }
+    else if (!exports.contains(node, root.children[pos + i])) {
+      throw new Error('Malformed tree. ', exports.toString(node), 'expected to be parent of ', exports.toString(root.children[pos +i]));
+    }
+  }
+
+  var children = root.children.splice(pos, len, node);
+  for (i = 0; i < children.length; i += 1) {
+    if (children[i].trace) {
+      console.log(exports.toString(children[i]), ' now consumed by ', exports.toString(node));
+    }
+  }
+  children.forEach(exports.insertInTree.bind({}, node));
+
+  if (node.trace) {
+    console.log(exports.toString(node) + 'inserted at ' + exports.toString(root) + ' child ' + pos);
+  }
+  return [root, pos];
 };
 
 /**
@@ -156,6 +192,7 @@ exports.span = function (a, b) {
 
   while (node.cidr > 0) {
     if (exports.contains(node, a) && exports.contains(node, b)) {
+      node.key = node.ip + '/' + node.cidr;
       return node;
     }
     node.cidr -= 1;
@@ -207,7 +244,7 @@ exports.dedup = function (node) {
 // Perform a shallow clone of a node
 exports.clone = function (node) {
   'use strict';
-  var newNode = {ip: node.ip, cidr: node.cir, value: node.value};
+  var newNode = {ip: node.ip, cidr: node.cidr, value: node.value};
   newNode.children = [].concat(node.children);
   return newNode;
 };
@@ -229,6 +266,7 @@ exports.afterNode = function (node) {
 
 // Return true if a precedes b in the IP address space.
 exports.precedes = function (a, b) {
+  'use strict';
   return (a.ip + (1 << 32 - a.cidr) <= b.ip);
 };
 
@@ -275,16 +313,24 @@ exports.safeMerge = function (node, parentValue) {
       if (!bad) {
         nm += 1;
         merged.children = node.children[i - 1].children;
-        for (j = 0; j < node.children[i].children.length; j += 1) {
-          exports.insertInTree(merged, node.children[i].children[j]);
+        exports.insertAllInTree(merged, node.children[i].children);
+
+        if (node.children[i].trace || node.children[i - 1].trace) {
+          var traced = node.children[i].trace ? node.children[i] : node.children[i - 1];
+          console.log(exports.toString(traced) + " became part of " + exports.toString(merged));
+          merged.trace = true;
         }
         node.children.splice(i - 1, 2);
-        j = i;
+
         for (j = 0; j < tomerge.length; j += 1) {
-          exports.insertInTree(merged, tomerge[j]);
           node.children.splice(node.children.indexOf(tomerge[j]), 1);
+          if (tomerge[j].trace) {
+            console.log(exports.toString(tomerge[j]) + " became [orthog] part of " + exports.toString(merged));
+            merged.trace = true;
+          }
+          exports.insertAllInTree(merged, tomerge[j].children);
         }
-        var nr = exports.insertInTree(node, merged);
+        exports.insertInTree(node, merged);
         i -= (1 + tomerge.length);
       }
     }
@@ -375,6 +421,9 @@ exports.treeSize = function (node) {
   var sum = 1,
     i = 0;
   for (i = 0; i < node.children.length; i += 1) {
+    if (node.children[i].trace) {
+      console.warn('trace node: ' + exports.toString(node.children[i]));
+    }
     sum += exports.treeSize(node.children[i]);
   }
   return sum;
