@@ -17,8 +17,8 @@ Size
 -----
 
 ```
-3.7M ip2country.js
-900K ip2country.js.gz
+2.0M ip2country.js
+510K ip2country.js.gz
 ```
 
 Installation
