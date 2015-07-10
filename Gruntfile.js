@@ -18,6 +18,7 @@ module.exports = function (grunt) {
   });
   grunt.loadNpmTasks('grunt-mocha-test');
   grunt.loadNpmTasks('grunt-contrib-jshint');
+  grunt.loadNpmTasks('grunt-bump');
 
   grunt.registerTask('build', 'Rebuild ip2country.js', function () {
     var build = require('./src/build'),
