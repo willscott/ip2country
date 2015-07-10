@@ -14,6 +14,13 @@ module.exports = function (grunt) {
         },
         src: ['spec/**.js']
       }
+    },
+    publish: {
+      ip2country: {
+        src: [
+          './'
+        ]
+      }
     }
   });
   grunt.loadNpmTasks('grunt-mocha-test');
