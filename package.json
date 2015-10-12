@@ -1,6 +1,6 @@
 {
   "name": "ip2country",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Self-contained IP to country lookup",
   "main": "ip2country.js",
   "repository": {
