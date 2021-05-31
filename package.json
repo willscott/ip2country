@@ -1,6 +1,6 @@
 {
   "name": "ip2country",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Self-contained IP to country lookup",
   "main": "ip2country.js",
   "repository": {
@@ -33,6 +33,6 @@
     "stream-reduce": "^1.0.3"
   },
   "dependencies": {
-    "asbycountry": "^1.2.0"
+    "asbycountry": "^1.4.2"
   }
 }
