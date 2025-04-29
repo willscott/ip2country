@@ -1,10 +1,14 @@
 /*jslint node:true */
-var fs = require('fs');
-var chalk = require('chalk');
+import fs from 'node:fs';
+import chalk from 'chalk';
 
 // Attempt to load a compiled maping from cache.
-var checkCache = function (filename, ttl) {
+export function checkCache(filename, ttl) {
+  if (filename.startsWith('file://')) {
+    filename = filename.slice(7);
+  }
   if (!fs.existsSync(filename)) {
+    console.log(chalk.yellow("Cache file not found: " + filename));
     return false;
   }
   var mtime = fs.statSync(filename).mtime;
@@ -15,5 +19,3 @@ var checkCache = function (filename, ttl) {
   }
   return true;
 };
-
-exports.has = checkCache;

@@ -4,7 +4,7 @@
  * in he form of prefix trees, where it is conceptually easier to understand
  * how to proplery insert and re-arrange entries safely.
  */
-var lookup = require('./lookup');
+import {prefix as lookupPrefix} from './lookup.js'
 
 // If set, traces all operations occuring to a given IP.
 var traceIP = false;
@@ -12,8 +12,7 @@ var traceIP = false;
 /**
  * Determine if one prefix node (parent) contains another (child)
  */
-exports.contains = function (parent, child) {
-  'use strict';
+export function contains(parent, child) {
   return (child.cidr > parent.cidr &&
           child.ip >= parent.ip &&
           child.ip < (parent.ip + (1 << (32 - parent.cidr))));
@@ -24,8 +23,7 @@ exports.contains = function (parent, child) {
  * node will be the keys whose address space is fully contained by the
  * parent.
  */
-exports.tableToTree = function (table) {
-  'use strict';
+export function tableToTree(table) {
   var keys = Object.keys(table),
     sorted,
     root;
@@ -48,11 +46,11 @@ exports.tableToTree = function (table) {
         value: table[key],
         children: []
       };
-    if (traceIP && exports.contains(node, traceIP)) {
+    if (traceIP && contains(node, traceIP)) {
       node.trace = true;
     }
 
-    exports.insertInTree(root, node);
+    insertInTree(root, node);
   });
 
   return root;
@@ -61,8 +59,7 @@ exports.tableToTree = function (table) {
 /**
  * Print the human readable cidr representation of a tree node.
  */
-exports.toString = function (node) {
-  'use strict';
+export function toString(node) {
   var buf = new Buffer(4);
   buf.writeUInt32BE(node.ip, 0);
   return buf[0] + '.' + buf[1] + '.' + buf[2] + '.' + buf[3] +
@@ -72,26 +69,24 @@ exports.toString = function (node) {
 /**
  * Insert an array of nodes into an IP prefix tree.
  */
-exports.insertAllInTree = function (root, nodes) {
-  'use strict';
+export function insertAllInTree(root, nodes) {
   for (var i = 0; i < nodes.length; i += 1) {
-    exports.insertInTree(root, nodes[i]);
+    insertInTree(root, nodes[i]);
   }
 };
 
 /**
  * Insert a node into an IP prefix tree
  */
-exports.insertInTree = function (root, node) {
-  'use strict';
+export function insertInTree(root, node) {
   var len = root.children.length,
     pos = Math.floor(len / 2),
     i = 0;
   // Binary search the children to see if the node is contained by any of them.
   while (len > 1) {
-    if (exports.precedes(root.children[pos], node)) {
+    if (precedes(root.children[pos], node)) {
       pos = Math.floor(pos + len / 2);
-    } else if (exports.precedes(node, root.children[pos])) {
+    } else if (precedes(node, root.children[pos])) {
       pos = Math.floor(pos - len / 2);
     }
     if (pos < 0) {
@@ -102,15 +97,15 @@ exports.insertInTree = function (root, node) {
     len = Math.ceil(len / 2);
   }
 
-  while (root.children[pos] && exports.precedes(root.children[pos], node)) {
+  while (root.children[pos] && precedes(root.children[pos], node)) {
     pos += 1;
   }
-  while (root.children[pos - 1] && !exports.precedes(root.children[pos - 1], node)) {
+  while (root.children[pos - 1] && !precedes(root.children[pos - 1], node)) {
     pos -= 1;
   }
   // Pos is now at the start of children with containment relationship with node.
   len = 0;
-  while (root.children[pos + len] && !exports.precedes(node, root.children[pos + len])) {
+  while (root.children[pos + len] && !precedes(node, root.children[pos + len])) {
     len += 1;
   }
   // Pos + len is now at the end of children with containment relationships with node.
@@ -119,31 +114,31 @@ exports.insertInTree = function (root, node) {
       if (root.children[pos + i].value != node.value) {
         console.warn('Potentially loosing information in overwrite of value.');
       } else if (root.children[pos + i].trace) {
-        console.log('Node was merged with equivalent node.', exports.toString(node));
+        console.log('Node was merged with equivalent node.', toString(node));
         node.trace = true;
       }
-      root.children[pos + i].children.forEach(exports.insertInTree.bind({}, node));
+      root.children[pos + i].children.forEach(insertInTree.bind({}, node));
       root.children[pos + i] = node;
       return [root, pos + i];
     }
-    else if (exports.contains(root.children[pos + i], node)) {
-      return exports.insertInTree(root.children[pos + i], node);
+    else if (contains(root.children[pos + i], node)) {
+      return insertInTree(root.children[pos + i], node);
     }
-    else if (!exports.contains(node, root.children[pos + i])) {
-      throw new Error('Malformed tree. ', exports.toString(node), 'expected to be parent of ', exports.toString(root.children[pos +i]));
+    else if (!contains(node, root.children[pos + i])) {
+      throw new Error('Malformed tree. ', toString(node), 'expected to be parent of ', toString(root.children[pos +i]));
     }
   }
 
   var children = root.children.splice(pos, len, node);
   for (i = 0; i < children.length; i += 1) {
     if (children[i].trace) {
-      console.log(exports.toString(children[i]), ' now consumed by ', exports.toString(node));
+      console.log(toString(children[i]), ' now consumed by ', toString(node));
     }
   }
-  children.forEach(exports.insertInTree.bind({}, node));
+  children.forEach(insertInTree.bind({}, node));
 
   if (node.trace) {
-    console.log(exports.toString(node) + 'inserted at ' + exports.toString(root) + ' child ' + pos);
+    console.log(toString(node) + 'inserted at ' + toString(root) + ' child ' + pos);
   }
   return [root, pos];
 };
@@ -151,8 +146,7 @@ exports.insertInTree = function (root, node) {
 /**
  * locate a key is in the tree representation of ip lookup data.
  */
-exports.findKey = function (node, key) {
-  'use strict';
+export function findKey(node, key) {
   if (node.key === key) {
     return node;
   } else {
@@ -160,8 +154,8 @@ exports.findKey = function (node, key) {
       parts = key.split('/'),
       keyNode = {ip: parseInt(parts[0], 10), cidr: parseInt(parts[1], 10)};
     for (i = 0; i < node.children.length; i += 1) {
-      if (exports.contains(node.children[i], keyNode)) {
-        return exports.findKey(node.children[i], key);
+      if (contains(node.children[i], keyNode)) {
+        return findKey(node.children[i], key);
       }
     }
   }
@@ -169,8 +163,7 @@ exports.findKey = function (node, key) {
 
 // Slow implementation of findKey which checks every node. Useful to understand
 // if the tree has been built incorrectly.
-var slow_findKey = function (node, key) {
-  'use strict';
+export function slow_findKey(node, key) {
   var i, k;
 
   if (node.key === key) {
@@ -186,17 +179,16 @@ var slow_findKey = function (node, key) {
 };
 
 // Find a spanning prefix for two children prefixes.
-exports.span = function (a, b) {
-  'use strict';
+export function span(a, b) {
   var node = {ip: Math.min(a.ip, b.ip), cidr: a.cidr, value: a.value, children: []};
 
   while (node.cidr > 0) {
-    if (exports.contains(node, a) && exports.contains(node, b)) {
+    if (contains(node, a) && contains(node, b)) {
       node.key = node.ip + '/' + node.cidr;
       return node;
     }
     node.cidr -= 1;
-    node.ip = lookup.prefix(node.ip, node.cidr);
+    node.ip = lookupPrefix(node.ip, node.cidr);
   }
   node.key = node.ip + '/' + node.cidr;
   return node;
@@ -204,21 +196,21 @@ exports.span = function (a, b) {
 
 // Return an array of nodes from the end of (ip/cidr) node 'from' to the
 // beginning of (ip/cidr) node 'to'.
-exports.createSpan = function (from, to, value) {
+export function createSpan(from, to, value) {
   'use strict';
   var ret = [],
     at = from,
     item = {},
     candidate;
-  while (exports.afterNode(at).ip < to.ip) {
-    item = exports.afterNode(at);
+  while (afterNode(at).ip < to.ip) {
+    item = afterNode(at);
     item.value = value;
-    candidate = lookup.prefix(item.ip, item.cidr - 1);
-    while (!exports.contains({ip: candidate, cidr: item.cidr - 1}, at) &&
+    candidate = lookupPrefix(item.ip, item.cidr - 1);
+    while (!contains({ip: candidate, cidr: item.cidr - 1}, at) &&
            candidate + (1 << (32 + 1 - item.cidr)) <= to.ip) {
       item.cidr -= 1;
       item.ip = candidate;
-      candidate = lookup.prefix(item.ip, item.cidr - 1);
+      candidate = lookupPrefix(item.ip, item.cidr - 1);
     }
     ret.push(item);
     at = item;
@@ -228,9 +220,8 @@ exports.createSpan = function (from, to, value) {
 
 
 // Flatten out direct children of a node with the same value.
-exports.dedup = function (node) {
-  'use strict';
-  var i,
+export function dedup(node) {
+  let i,
     child;
   for (i = 0; i < node.children.length; i += 1) {
     if (node.children[i].value === node.value) {
@@ -242,31 +233,27 @@ exports.dedup = function (node) {
 };
 
 // Perform a shallow clone of a node
-exports.clone = function (node) {
-  'use strict';
-  var newNode = {ip: node.ip, cidr: node.cidr, value: node.value};
+export function clone(node) {
+  let newNode = {ip: node.ip, cidr: node.cidr, value: node.value};
   newNode.children = [].concat(node.children);
   return newNode;
 };
 
 
 // Create a node representing the single IP before a given cidr range.
-exports.beforeNode = function (node) {
-  'use strict';
-  var newNode = {ip: node.ip - 1, cidr: 32, value: node.value, children: []};
+export function beforeNode(node) {
+  let newNode = {ip: node.ip - 1, cidr: 32, value: node.value, children: []};
   return newNode;
 };
 
 // Create a node representing the single IP after a given cidr range.
-exports.afterNode = function (node) {
-  'use strict';
-  var newNode = {ip: node.ip + (1 << (32 - node.cidr)), cidr: 32, value: node.value, children: []};
+export function afterNode(node) {
+  let newNode = {ip: node.ip + (1 << (32 - node.cidr)), cidr: 32, value: node.value, children: []};
   return newNode;
 };
 
 // Return true if a precedes b in the IP address space.
-exports.precedes = function (a, b) {
-  'use strict';
+export function precedes(a, b) {
   return (a.ip + (1 << 32 - a.cidr) <= b.ip);
 };
 
@@ -278,9 +265,8 @@ exports.precedes = function (a, b) {
  * tradeoff between number of shims needed versus number of keys merged can be
  * evaluated. and the merge can recurse beyond the top level.
  */
-exports.safeMerge = function (node, parentValue) {
-  'use strict';
-  var i,
+export function safeMerge(node, parentValue) {
+  let i,
     j,
     merged,
     tomerge = [],
@@ -288,12 +274,12 @@ exports.safeMerge = function (node, parentValue) {
     nm = 0;
   for (i = 1; i < node.children.length; i += 1) {
     if (i >= 1 && node.children[i].value === node.children[i - 1].value) {
-      merged = exports.span(node.children[i], node.children[i - 1]);
+      merged = span(node.children[i], node.children[i - 1]);
       tomerge = [];
       // Are there problems with this merged node?
       bad = false;
       j = i + 1;
-      while (node.children[j] && exports.contains(merged, node.children[j])) {
+      while (node.children[j] && contains(merged, node.children[j])) {
         if (node.children[j].value !== merged.value) {
           bad = true;
         }
@@ -301,7 +287,7 @@ exports.safeMerge = function (node, parentValue) {
         j += 1;
       }
       j = i - 2;
-      while (node.children[j] && exports.contains(merged, node.children[j])) {
+      while (node.children[j] && contains(merged, node.children[j])) {
         if (node.children[j].value !== merged.value) {
           bad = true;
         }
@@ -313,11 +299,11 @@ exports.safeMerge = function (node, parentValue) {
       if (!bad) {
         nm += 1;
         merged.children = node.children[i - 1].children;
-        exports.insertAllInTree(merged, node.children[i].children);
+        insertAllInTree(merged, node.children[i].children);
 
         if (node.children[i].trace || node.children[i - 1].trace) {
           var traced = node.children[i].trace ? node.children[i] : node.children[i - 1];
-          console.log(exports.toString(traced) + " became part of " + exports.toString(merged));
+          console.log(toString(traced) + " became part of " + toString(merged));
           merged.trace = true;
         }
         node.children.splice(i - 1, 2);
@@ -325,12 +311,12 @@ exports.safeMerge = function (node, parentValue) {
         for (j = 0; j < tomerge.length; j += 1) {
           node.children.splice(node.children.indexOf(tomerge[j]), 1);
           if (tomerge[j].trace) {
-            console.log(exports.toString(tomerge[j]) + " became [orthog] part of " + exports.toString(merged));
+            console.log(toString(tomerge[j]) + " became [orthog] part of " + toString(merged));
             merged.trace = true;
           }
-          exports.insertAllInTree(merged, tomerge[j].children);
+          insertAllInTree(merged, tomerge[j].children);
         }
-        exports.insertInTree(node, merged);
+        insertInTree(node, merged);
         i -= (1 + tomerge.length);
       }
     }
@@ -341,9 +327,8 @@ exports.safeMerge = function (node, parentValue) {
 /**
  * Rearrange node & direct children if doing so can remove total number of nodes.
  */
-exports.findRearrangements = function (node) {
-  'use strict';
-  var vcounts = {},
+export function findRearrangements(node) {
+  let vcounts = {},
     keys,
     i = 0,
     maxCount = 0,
@@ -371,10 +356,10 @@ exports.findRearrangements = function (node) {
     }
   }
 
-  candidate = exports.span(exports.firstOf(node, maxVal), exports.lastOf(node, maxVal));
+  candidate = span(firstOf(node, maxVal), lastOf(node, maxVal));
   // push in the children that are covered by the candidate.
   for (i = 0; i < node.children.length; i += 1) {
-    if (exports.contains(candidate, node.children[i])) {
+    if (contains(candidate, node.children[i])) {
       candidate.children.push(node.children[i]);
     }
   }
@@ -384,30 +369,30 @@ exports.findRearrangements = function (node) {
   // Any address space not covered by children require insertion of new nodes to revert to parent value.
   candidate.newChildren = [];
   for (i = 0; i < candidate.children.length; i += 1) {
-    candidate.newChildren = candidate.newChildren.concat(exports.createSpan(
-      (i === 0) ? exports.beforeNode(node) : candidate.children[i - 1],
+    candidate.newChildren = candidate.newChildren.concat(createSpan(
+      (i === 0) ? beforeNode(node) : candidate.children[i - 1],
       candidate.children[i],
       node.value
     ));
     candidate.newChildren.push(candidate.children[i]);
   }
   if (candidate.children.length) {
-    candidate.children = candidate.newChildren.concat(exports.createSpan(
+    candidate.children = candidate.newChildren.concat(createSpan(
       candidate.children[candidate.children.length - 1],
-      exports.afterNode(node),
+      afterNode(node),
       node.value
     ));
   }
   delete candidate.newChildren;
 
-  exports.dedup(candidate);
+  dedup(candidate);
 
   maxCount = 0;
   for (i = spliceStart; i < spliceEnd; i += 1) {
-    maxCount += exports.treeSize(node.children[i]);
+    maxCount += treeSize(node.children[i]);
   }
 
-  if (exports.treeSize(candidate) < maxCount) {
+  if (treeSize(candidate) < maxCount) {
     // replace.
     node.children.splice(spliceStart, spliceEnd - spliceStart, candidate);
   }
@@ -416,23 +401,21 @@ exports.findRearrangements = function (node) {
 };
 
 // Total number of nodes in a tree
-exports.treeSize = function (node) {
-  'use strict';
-  var sum = 1,
+export function treeSize(node) {
+  let sum = 1,
     i = 0;
   for (i = 0; i < node.children.length; i += 1) {
     if (node.children[i].trace) {
-      console.warn('trace node: ' + exports.toString(node.children[i]));
+      console.warn('trace node: ' + toString(node.children[i]));
     }
-    sum += exports.treeSize(node.children[i]);
+    sum += treeSize(node.children[i]);
   }
   return sum;
 };
 
 // Get the first child of a node which has a given value;
-exports.firstOf = function (node, value) {
-  'use strict';
-  var i;
+export function firstOf(node, value) {
+  let i;
   for (i = 0; i < node.children.length; i += 1) {
     if (node.children[i].value === value) {
       return node.children[i];
@@ -442,9 +425,8 @@ exports.firstOf = function (node, value) {
 };
 
 // Get the last child of a node which has a given value;
-exports.lastOf = function (node, value) {
-  'use strict';
-  var i;
+export function lastOf(node, value) {
+  let i;
   for (i = node.children.length - 1; i >= 0; i -= 1) {
     if (node.children[i].value === value) {
       return node.children[i];
@@ -456,9 +438,8 @@ exports.lastOf = function (node, value) {
 /**
  * Flatten a tree of prefixes back to a flattened lookup table.
  */
-exports.treeToTable = function (node) {
-  'use strict';
-  var table = {},
+export function treeToTable(node) {
+  let table = {},
     childKeys,
     addKeys,
     i;
@@ -468,7 +449,7 @@ exports.treeToTable = function (node) {
 
   for (i = 0; i < node.children.length; i += 1) {
     table[node.children[i].key] = node.children[i].value;
-    childKeys = exports.treeToTable(node.children[i]);
+    childKeys = treeToTable(node.children[i]);
     Object.keys(childKeys).forEach(addKeys);
   }
   return table;

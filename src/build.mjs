@@ -1,16 +1,13 @@
 /*jslint node:true, bitwise:true */
-var chalk = require('chalk');
-var fs = require('fs');
-var http = require('http');
-var Q = require('q');
-
-var as2country = require('./as2country');
-var lookup = require('./lookup');
+import chalk from 'chalk';
+import { prefix as lookupPrefix } from './lookup.js';
+import fs from 'node:fs';
+import createAS2CountryMap from './as2country.mjs'
+import { tableToTree, safeMerge, findRearrangements, treeToTable } from './tree.js';
 
 // Merge IP->Country map from IP->ASN and ASN->Country maps.
-var mergeIP2CountryMap = function (ip2as, as2country) {
-  'use strict';
-  var
+export function mergeIP2CountryMap(ip2as, as2country) {
+  let
     keys = Object.keys(ip2as),
     len = keys.length,
     i,
@@ -30,8 +27,7 @@ var mergeIP2CountryMap = function (ip2as, as2country) {
 
 // Find sibling pairs.
 // In practice this seems to remove 50% of entries.
-var reduceIP2CountryMap = function (map, pass) {
-  'use strict';
+export function reduceIP2CountryMap(map, pass) {
   var keys = Object.keys(map),
     outMap = {},
     withSameSib = 0,
@@ -52,7 +48,7 @@ var reduceIP2CountryMap = function (map, pass) {
     sibling = prefix ^ (1 << (32 - cidr));
     if (map[sibling + '/' + cidr] === map[keys[i]]) {
       withSameSib += 1;
-      outMap[lookup.prefix(prefix, cidr - 1) + '/' + (cidr - 1)] = map[keys[i]];
+      outMap[lookupPrefix(prefix, cidr - 1) + '/' + (cidr - 1)] = map[keys[i]];
     } else {
       outMap[keys[i]] = map[keys[i]];
     }
@@ -63,15 +59,14 @@ var reduceIP2CountryMap = function (map, pass) {
     return reduceIP2CountryMap(outMap, pass + 1);
   } else {
     /*jslint newcap:true*/
-    return Q(outMap);
+    return (outMap);
     /*jslint newcap:false*/
   }
 };
 
 // Remove entries which share the same value as what would be found by going
 // up to their parent anyway.
-var dedupeIP2CountryMap = function (map) {
-  'use strict';
+export function dedupeIP2CountryMap (map) {
   var keys = Object.keys(map),
     outMap = {},
     dups = 0,
@@ -89,7 +84,7 @@ var dedupeIP2CountryMap = function (map) {
     isDup = false;
     while (cidr > 0) {
       cidr -= 1;
-      prefix = lookup.prefix(prefix, cidr);
+      prefix = lookupPrefix(prefix, cidr);
       if (map[prefix + '/' + cidr] && map[prefix + '/' + cidr] === map[keys[i]]) {
         isDup = true;
         dups += 1;
@@ -107,81 +102,82 @@ var dedupeIP2CountryMap = function (map) {
 };
 
 // Build the prefix tree of the map, to perform more advanced rearrangement.
-var treeTransform = function (map) {
-  'use strict';
-  var treeBuilder = require('./tree'),
-    tree,
+export function treeTransform(map) {
+  let tree,
     transform,
     output;
   console.log(chalk.blue("Building Tree."));
-  tree = treeBuilder.tableToTree(map);
+  tree = tableToTree(map);
   console.log(chalk.blue("Merging Nodes."));
-  transform = treeBuilder.safeMerge(tree, 'ZZ');
+  transform = safeMerge(tree, 'ZZ');
   console.log(chalk.green("Done - merged " + transform + " keys."));
   console.log(chalk.blue("Compacting."));
-  transform = treeBuilder.findRearrangements(tree);
+  transform = findRearrangements(tree);
   console.log(chalk.blue("Flattening."));
-  output = treeBuilder.treeToTable(tree);
+  output = treeToTable(tree);
   console.log(chalk.green("Done."));
   return output;
 };
 
 // Generic map maker with options exposed.
-var getGenericMap = function (compress, toCountry, when, nocache) {
-  'use strict';
+export async function getGenericMap(compress, toCountry, when, nocache) {
   var countryMap,
     asmapper;
   if (when) {
-    asmapper = require('./historicBGPData');
+    asmapper = await import('./historicBGPData.js');
   } else {
-    asmapper = require('./currentBGPData');
+    asmapper = await import('./currentBGPData.js');
   }
 
-  return asmapper.loadIP2ASMap(when, nocache).then(function (path) {
-    return asmapper.parseIP2ASMap(path);
-  }).then(function (i2am) {
-    asmapper.cleanup(nocache);
-    if (toCountry) {
-      return as2country.createAS2CountryMap(nocache).then(function (a2cm) {
-        return mergeIP2CountryMap(i2am, a2cm);
-      });
-    } else {
-      return i2am;
-    }
-  }).then(function (map) {
-    if (compress) {
-      return reduceIP2CountryMap(map)
-        .then(function (map) {
-          return dedupeIP2CountryMap(map);
-        }).then(function (map) {
-          return treeTransform(map);
-        });
-    } else {
-      return map;
-    }
-  });
+  let path = await asmapper.loadIP2ASMap(when, nocache)
+  let i2am = await asmapper.parseIP2ASMap(path);
+  asmapper.cleanup(nocache);
+  let map
+  if (toCountry) {
+    let a2cm = await createAS2CountryMap(nocache)
+    map = await mergeIP2CountryMap(i2am, a2cm);
+  } else {
+    map = i2am
+  }
+  if (compress) {
+    map = await reduceIP2CountryMap(map)
+    map = await dedupeIP2CountryMap(map);
+    map = await treeTransform(map);
+  }
+  return map
 };
 
 // Promise for the final Map
-var getMap = function (verbose) {
-  'use strict';
+export async function getMap(verbose) {
   return getGenericMap(true, true);
 };
 
 // Creation of ip2country.js
-var buildOutput = function (map, outputStream) {
-  'use strict';
-  return Q.Promise(function (resolve, reject) {
-    outputStream.write('var table = ');
-    outputStream.write(JSON.stringify(map));
-    outputStream.write(';\n');
-    outputStream.write(fs.readFileSync(require.resolve('./lookup')));
-    outputStream.end(resolve);
+export async function buildOutput(map, outputStream) {
+  outputStream.write('let table = ');
+  outputStream.write(JSON.stringify(map));
+  outputStream.write(';\n');
+  let path = import.meta.resolve('./lookup.js')
+  if (path.startsWith('file://')) {
+    path = path.slice(7);
+  }
+  outputStream.write(fs.readFileSync(path));
+  outputStream.end();
+};
+
+export default function main() {
+  console.log(chalk.blue("Building ip2country.js"));
+  let out = async () => {
+    let map = await getMap(true);
+    let output = fs.createWriteStream('ip2country.js');
+    return await buildOutput(map, output);
+  }
+  out().then((out) => {
+    console.log(chalk.green("Done."));
+  }
+  ).catch((err) => {
+    console.error(chalk.red("Error: " + err));
   });
 };
 
-exports.reduceIP2CountryMap = reduceIP2CountryMap;
-exports.dedupeIP2CountryMap = dedupeIP2CountryMap;
-exports.getMap = getMap;
-exports.getGenericMap = getGenericMap;
-exports.buildOutput = buildOutput;
+main();

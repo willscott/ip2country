@@ -17,8 +17,8 @@ Size
 -----
 
 ```
-2.0M ip2country.js
-510K ip2country.js.gz
+4.3M ip2country.js
+1.1M ip2country.js.gz
 ```
 
 Installation
@@ -32,8 +32,8 @@ Usage
 -----
 
 ```javascript
-var ip2country = require('ip2country');
-var country = ip2country(ip);
+import ip2country from 'ip2country';
+let country = ip2country(ip);
 ```
 
 Advanced Usage

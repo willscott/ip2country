@@ -8,8 +8,7 @@
  * @param {Integer} cidr, the number of bytes to keep. 32 keeps all bytes while
  *     0 removes all bytes.
  */
-var prefix = function (ip, cidr) {
-  'use strict';
+export function prefix(ip, cidr) {
   var subnet, bytes;
 
   if (typeof ip === 'string') {
@@ -17,7 +16,7 @@ var prefix = function (ip, cidr) {
     if (bytes.length < 4) {
       return 'unknown';
     }
-    subnet = new Buffer(bytes).readUInt32BE(0);
+    subnet = Buffer.from(bytes).readUInt32BE(0);
   } else {
     subnet = ip;
   }
@@ -40,8 +39,7 @@ var prefix = function (ip, cidr) {
  * which should be a dictionary where keys are subnet prefixes, which map
  * to an object keyed by CIDR and valued with countries.
  */
-var lookup = function (table, ip) {
-  'use strict';
+export function lookup(table, ip) {
   var cidr = 32,
     subnet = prefix(ip, cidr);
 
@@ -59,14 +57,6 @@ var lookup = function (table, ip) {
   return 'ZZ';
 };
 
-// This file can be concatinated to a pre-built table, or used
-// for lookups directly.
-if (typeof table === 'object') {
-  module.exports = lookup.bind({}, table);
-  module.exports.table = table;
-} else {
-  module.exports = {};
-}
-module.exports.lookup = lookup;
-module.exports.prefix = prefix;
-
+export default function(ip) {
+  return lookup(table, ip)
+};
